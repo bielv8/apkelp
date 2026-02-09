@@ -127,6 +127,29 @@ try:
 
     logging.info("✅ Flask extensions initialized successfully")
 
+    @app.errorhandler(500)
+    def internal_error(error):
+        return jsonify({
+            "status": "error",
+            "error": "Internal Server Error",
+            "message": str(error),
+            "original_exception": str(getattr(error, "original_exception", ""))
+        }), 500
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        # pass through HTTP errors
+        if isinstance(e, HTTPException):
+            return e
+        # now you're handling non-HTTP exceptions only
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "trace": str(getattr(e, "__traceback__", "No traceback"))
+        }), 500
+
+    from werkzeug.exceptions import HTTPException
+
     # ROOT LEVEL ROUTES
     @app.route('/init-db')
     def init_db_route():
