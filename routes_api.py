@@ -297,10 +297,80 @@ def import_legacy_data(current_user):
                     projects_count += 1
             db.session.commit()
 
+        # Import Visits
+        visitas_count = 0
+        if 'visitas' in data:
+            for v_data in data['visitas']:
+                # Find project
+                proj = Projeto.query.filter_by(numero=v_data.get('numero_projeto')).first() or \
+                       Projeto.query.get(v_data.get('projeto_id'))
+                
+                if proj:
+                    new_visit = Visita(
+                        numero=v_data.get('numero'),
+                        projeto_id=proj.id,
+                        responsavel_id=current_user.id,
+                        data_inicio=datetime.datetime.fromisoformat(v_data['data_inicio']) if v_data.get('data_inicio') else None,
+                        data_fim=datetime.datetime.fromisoformat(v_data['data_fim']) if v_data.get('data_fim') else None,
+                        status=v_data.get('status', 'Agendada'),
+                        descricao=v_data.get('descricao'),
+                        observacoes=v_data.get('observacoes')
+                    )
+                    db.session.add(new_visit)
+                    visitas_count += 1
+            db.session.commit()
+
+        # Import Reports and Photos
+        reports_count = 0
+        photos_count = 0
+        if 'relatorios' in data:
+            for r_data in data['relatorios']:
+                # Find project
+                proj = Projeto.query.filter_by(numero=r_data.get('numero_projeto')).first() or \
+                       Projeto.query.get(r_data.get('projeto_id'))
+                
+                if proj:
+                    # Check if report already exists by number and project
+                    if not Relatorio.query.filter_by(numero=r_data['numero'], projeto_id=proj.id).first():
+                        new_rep = Relatorio(
+                            numero=r_data['numero'],
+                            numero_projeto=r_data.get('numero_projeto_val'), # Field name might vary locally
+                            titulo=r_data.get('titulo', 'Relatório Importado'),
+                            projeto_id=proj.id,
+                            autor_id=current_user.id,
+                            status=r_data.get('status', 'Concluído'),
+                            data_relatorio=datetime.datetime.fromisoformat(r_data['data_relatorio']) if r_data.get('data_relatorio') else datetime.datetime.utcnow(),
+                            descricao=r_data.get('descricao'),
+                            conteudo=r_data.get('conteudo'),
+                            checklist_data=r_data.get('checklist_data')
+                        )
+                        db.session.add(new_rep)
+                        db.session.flush() # Get ID for photos
+                        
+                        # Import Photos for this report
+                        if 'photos' in r_data:
+                            for ph_data in r_data['photos']:
+                                new_photo = FotoRelatorio(
+                                    relatorio_id=new_rep.id,
+                                    url=ph_data.get('url'),
+                                    filename=ph_data.get('filename'),
+                                    titulo=ph_data.get('titulo'),
+                                    legenda=ph_data.get('legenda'),
+                                    ordem=ph_data.get('ordem', 0)
+                                )
+                                db.session.add(new_photo)
+                                photos_count += 1
+                        
+                        reports_count += 1
+            db.session.commit()
+
         return jsonify({
             'message': 'Migration batch processed',
             'users_imported': users_count,
-            'projects_imported': projects_count
+            'projects_imported': projects_count,
+            'visitas_imported': visitas_count,
+            'reports_imported': reports_count,
+            'photos_imported': photos_count
         }), 201
 
     except Exception as e:
