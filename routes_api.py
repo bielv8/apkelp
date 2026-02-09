@@ -39,8 +39,8 @@ def token_required(f):
     
     return decorated
 
-@api_bp.route('/status', methods=['GET'])
-def api_status():
+@api_bp.route('/status-v21', methods=['GET'])
+def api_status_v21():
     return jsonify({
         'status': 'online', 
         'version': '2.1-admin-fix',
