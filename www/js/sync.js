@@ -14,6 +14,12 @@ class SyncEngine {
      * Initialize sync engine - start periodic sync
      */
     async init() {
+        // PERMISSION CHECK: Do not sync if not logged in
+        if (!localStorage.getItem('token')) {
+            console.log('🚫 No auth token found. Sync engine paused.');
+            return;
+        }
+
         // Load last sync time
         this.lastSyncTime = await db.metadata.getItem('last_sync_time');
 
