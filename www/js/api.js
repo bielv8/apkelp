@@ -26,55 +26,54 @@ class APIClient {
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
 
-        // Add auth token if available
+        // Ensure headers exist
+        options.headers = options.headers || {};
+
+        // Add Authorization if token exists
         if (this.token) {
-            headers['Authorization'] = `Bearer ${this.token}`;
+            options.headers['Authorization'] = `Bearer ${this.token}`;
         }
 
-        const config = {
-            ...options,
-            headers
-        };
+        // Default to JSON content type unless it's FormData
+        if (!(options.body instanceof FormData)) {
+            options.headers['Content-Type'] = 'application/json';
+        }
+
+        console.log(`[API] Requesting: ${endpoint}`, options);
+
+        if (!navigator.onLine) {
+            console.warn('[API] Offline mode detected. Queueing request.');
+            this.queueRequest(endpoint, options);
+            throw new Error('Offline: Request queued');
+        }
 
         try {
-            // Check if online
-            if (!this.isOnline) {
-                throw new Error('OFFLINE');
-            }
-
-            const response = await fetch(url, config);
-
-            // Handle authentication errors
-            if (response.status === 401) {
-                this.handleUnauthorized();
-                throw new Error('Unauthorized');
-            }
-
-            // Parse response
-            const data = await response.json();
+            const response = await fetch(url, options);
+            console.log(`[API] Response status: ${response.status}`);
 
             if (!response.ok) {
-                throw new Error(data.error || `HTTP ${response.status}`);
-            }
-
-            return data;
-
-        } catch (error) {
-            console.error('API Request failed:', error);
-
-            // Queue request if offline
-            if (error.message === 'OFFLINE' || error.name === 'TypeError') {
-                if (options.method !== 'GET') {
-                    await this.queueRequest(endpoint, options);
+                const errorText = await response.text();
+                console.error('[API] Error response:', errorText);
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    throw new Error(errorJson.message || `HTTP Error ${response.status}`);
+                } catch (e) {
+                    throw new Error(`HTTP Error ${response.status}: ${errorText}`);
                 }
-                throw new Error('Sem conexão. Dados salvos localmente.');
             }
 
+            // Handle empty responses (like 204 No Content)
+            if (response.status === 204) return null;
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('[API] Network/Server Error:', error);
+            if (navigator.onLine && error.message.includes('Failed to fetch')) {
+                console.warn('[API] Fetch failed while online, queuing...');
+                this.queueRequest(endpoint, options);
+            }
             throw error;
         }
     }
