@@ -148,43 +148,68 @@
             // Reset alerts
             errorAlert.classList.add('d-none');
             offlineAlert.classList.add('d-none');
+            errorAlert.textContent = '';
 
             // UI Loading
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Entrando...';
 
             try {
-                let response;
-
-                // Try online login first
+                // Try online login first if network is available
                 if (navigator.onLine) {
                     try {
-                        response = await api.login(username, password);
+                        const response = await api.login(username, password);
                         console.log('✓ Login online successful');
+
+                        // Success - redirect
+                        setTimeout(() => {
+                            window.location.href = 'dashboard.html';
+                        }, 500);
+                        return;
+
                     } catch (onlineError) {
-                        console.warn('Online login failed, trying offline...', onlineError);
-                        // Try offline login as fallback
-                        response = await api.offlineLogin(username, password);
-                        offlineAlert.classList.remove('d-none');
+                        console.error('Online login failed:', onlineError);
+
+                        // If it's a server error (500, 503), show it. Don't fallback to offline immediately.
+                        if (onlineError.message.includes('500') || onlineError.message.includes('503') || onlineError.message.includes('Service Unavailable')) {
+                            throw new Error('Servidor indisponível no momento. Tente novamente em instantes.');
+                        }
+
+                        // If credentials are wrong, stop here.
+                        if (onlineError.message.includes('401') || onlineError.message.includes('Unauthorized') || onlineError.message.includes('Credenciais')) {
+                            throw new Error('Usuário ou senha incorretos.');
+                        }
+
+                        console.warn('Network/Other error, trying offline fallback...');
+                        // Fallthrough to offline attempt only for network issues
                     }
-                } else {
-                    // Offline mode - use cached credentials
-                    response = await api.offlineLogin(username, password);
-                    offlineAlert.classList.remove('d-none');
                 }
 
-                // Success - redirect to dashboard
-                if (response.token || response.offline) {
+                // Offline mode / Fallback - use cached credentials
+                try {
+                    const response = await api.offlineLogin(username, password);
+                    console.log('✓ Offline login successful');
+                    offlineAlert.classList.remove('d-none');
+
                     setTimeout(() => {
                         window.location.href = 'dashboard.html';
-                    }, 500);
+                    }, 1000); // Give user time to see offline message
+                } catch (offlineError) {
+                    // Normalize error message
+                    if (offlineError.message.includes('No credentials')) {
+                        throw new Error('Nenhuma credencial salva. Conecte-se à internet para o primeiro acesso.');
+                    } else if (offlineError.message.includes('mismatch')) {
+                        throw new Error('Senha incorreta (modo offline).');
+                    } else {
+                        throw offlineError;
+                    }
                 }
 
             } catch (error) {
-                console.error('Login error:', error);
-                errorAlert.textContent = error.message || 'Erro ao fazer login. Verifique suas credenciais.';
+                console.error('Final Login Error:', error);
+                errorAlert.textContent = error.message.replace('Error:', '').trim() || 'Erro desconhecido ao entrar.';
                 errorAlert.classList.remove('d-none');
-
+            } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
             }
