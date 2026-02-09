@@ -5,7 +5,6 @@ import jwt
 import datetime
 from functools import wraps
 from models import User, Relatorio, Projeto, FotoRelatorio, Visita
-from app import db
 import os
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -28,6 +27,7 @@ def token_required(f):
             return jsonify({'error': 'Token is missing!'}), 401
         
         try:
+            from app import db
             data = jwt.decode(token, get_jwt_secret(), algorithms=["HS256"])
             current_user_data = db.session.get(User, data['user_id'])
             if not current_user_data:
@@ -250,6 +250,7 @@ def import_legacy_data(current_user):
         return jsonify({'error': 'Unauthorized'}), 403
 
     try:
+        from app import db
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
