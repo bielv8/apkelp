@@ -125,12 +125,14 @@ try:
         replit_domain = f"https://{os.environ['REPL_SLUG']}.{os.environ['REPL_OWNER']}.repl.co"
         allowed_origins.append(replit_domain)
 
+    # Configure CORS - Permissive for Debugging
     CORS(app, 
-         supports_credentials=True, 
-         resources={
-             r"/api/*": {"origins": allowed_origins},
-             r"/save_location": {"origins": allowed_origins}
-         })
+         resources={r"/*": {"origins": "*"}},
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    
+    logging.info("⚠️ CORS configured to allow ALL origins for debugging")
 
     logging.info("✅ Flask extensions initialized successfully")
 
