@@ -2,9 +2,7 @@
   "appId": "pro.elpconsultoria.relatorios",
   "appName": "ELP Relatórios",
   "webDir": "www",
-  "server": {
-    "cleartext": true
-  },
+  "webDir": "www",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 3000,
