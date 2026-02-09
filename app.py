@@ -708,8 +708,8 @@ try:
     
     # Surgical imports only - Avoid routes.py which shadows paths
     logging.info("🌐 Surgical import of specific API route files...")
-    import routes_relatorios_api # Advanced Report API - typically safe
-    logging.info("✅ routes_relatorios_api imported")
+    # import routes_relatorios_api # Advanced Report API - typically safe
+    # logging.info("✅ routes_relatorios_api imported")
     
 except ImportError as ie:
     logging.error(f"❌ Could not import routes: {ie}")
