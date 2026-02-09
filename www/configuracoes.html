@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - ELP Relatórios</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="./static/css/style.css" rel="stylesheet">
+</head>
+
+<body class="bg-light" data-page="configuracoes">
+
+    <nav class="navbar navbar-dark bg-dark py-3 px-4 shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="dashboard.html">
+                <i class="fas fa-hard-hat me-2"></i>ELP Relatórios
+            </a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h3 class="mb-4"><i class="fas fa-cog me-2"></i>Configurações</h3>
+
+        <!-- User Info -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-user me-2"></i>Perfil</h5>
+                <p class="mb-1"><strong>Nome:</strong> <span id="userName">-</span></p>
+                <p class="mb-1"><strong>Email:</strong> <span id="userEmail">-</span></p>
+                <p class="mb-0"><strong>Cargo:</strong> <span id="userCargo">-</span></p>
+            </div>
+        </div>
+
+        <!-- Sync Settings -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-sync me-2"></i>Sincronização</h5>
+                <p class="text-muted small mb-2">Última sincronização: <span id="lastSync">Nunca</span></p>
+                <p class="text-muted small mb-3">Ações pendentes: <span id="pendingCount">0</span></p>
+                <button class="btn btn-primary w-100" id="syncNowBtn">
+                    <i class="fas fa-sync me-2"></i>Sincronizar Agora
+                </button>
+            </div>
+        </div>
+
+        <!-- Storage -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-database me-2"></i>Armazenamento</h5>
+                <p class="text-muted small mb-3">Limpar dados locais salvos offline</p>
+                <button class="btn btn-outline-danger w-100" id="clearCacheBtn">
+                    <i class="fas fa-trash me-2"></i>Limpar Cache
+                </button>
+            </div>
+        </div>
+
+        <!-- About -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-info-circle me-2"></i>Sobre</h5>
+                <p class="mb-1"><strong>Versão:</strong> 2.0.0</p>
+                <p class="mb-1"><strong>Servidor:</strong> <span id="serverUrl">-</span></p>
+                <p class="mb-0"><strong>Status:</strong> <span id="connectionStatus">-</span></p>
+            </div>
+        </div>
+
+        <!-- Logout -->
+        <div class="d-grid gap-2 mb-5">
+            <button class="btn btn-danger" id="logoutBtn">
+                <i class="fas fa-sign-out-alt me-2"></i>Sair
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <script src="./js/db.js"></script>
+    <script src="./js/api.js"></script>
+    <script src="./js/sync.js"></script>
+    <script src="./js/navbar.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            loadUserInfo();
+            loadSyncInfo();
+            loadServerInfo();
+
+            // Sync now
+            document.getElementById('syncNowBtn').addEventListener('click', async () => {
+                const btn = document.getElementById('syncNowBtn');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sincronizando...';
+
+                await syncEngine.manualSync();
+
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync me-2"></i>Sincronizar Agora';
+                loadSyncInfo();
+            });
+
+            // Clear cache
+            document.getElementById('clearCacheBtn').addEventListener('click', async () => {
+                if (!confirm('Deseja realmente limpar todos os dados locais? Isso não afetará os dados no servidor.')) {
+                    return;
+                }
+
+                await db.clearAll();
+                alert('Cache limpo com sucesso!');
+                window.location.reload();
+            });
+
+            // Logout
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                if (confirm('Deseja sair?')) {
+                    api.logout();
+                    window.location.href = 'index.html';
+                }
+            });
+        });
+
+        function loadUserInfo() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            document.getElementById('userName').textContent = user.nome_completo || '-';
+            document.getElementById('userEmail').textContent = user.email || '-';
+            document.getElementById('userCargo').textContent = user.cargo || '-';
+        }
+
+        async function loadSyncInfo() {
+            const status = syncEngine.getSyncStatus();
+            const lastSync = await db.metadata.getItem('last_sync_time');
+
+            if (lastSync) {
+                const date = new Date(lastSync);
+                document.getElementById('lastSync').textContent = date.toLocaleString('pt-BR');
+            }
+
+            document.getElementById('pendingCount').textContent = status.pendingChanges;
+        }
+
+        function loadServerInfo() {
+            document.getElementById('serverUrl').textContent = api.baseURL;
+            document.getElementById('connectionStatus').textContent = navigator.onLine ?
+                '🟢 Online' : '🔴 Offline';
+
+            window.addEventListener('online', () => {
+                document.getElementById('connectionStatus').textContent = '🟢 Online';
+            });
+
+            window.addEventListener('offline', () => {
+                document.getElementById('connectionStatus').textContent = '🔴 Offline';
+            });
+        }
+    </script>
+</body>
+
+</html>
