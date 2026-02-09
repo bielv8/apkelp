@@ -235,9 +235,77 @@ def sync_down(current_user):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-@api_bp.route('/defaults', methods=['GET'])
+@api_bp.route('/admin/import-legacy-data', methods=['POST'])
 @token_required
-def get_defaults(current_user):
+def import_legacy_data(current_user):
+    """
+    Importa dados legados via JSON (Bypass para firewall de banco de dados).
+    Permite migração de dados sem conexão direta SQL.
+    """
+    if not current_user.is_master:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Import Users
+        users_count = 0
+        if 'users' in data:
+            for u_data in data['users']:
+                if not User.query.filter_by(email=u_data['email']).first():
+                    new_user = User(
+                        username=u_data['username'],
+                        email=u_data['email'],
+                        password_hash=u_data['password_hash'], # Already hashed
+                        nome_completo=u_data['nome_completo'],
+                        cargo=u_data.get('cargo'),
+                        is_master=u_data.get('is_master', False),
+                        ativo=u_data.get('ativo', True)
+                    )
+                    db.session.add(new_user)
+                    users_count += 1
+            db.session.commit() # Commit users first to get IDs if needed
+            
+        # Re-fetch users map for FKs if needed, or rely on existing IDs if preserving (postgres sequences might need update)
+        # For simplicity in this "feed the bank" mode, we assume we might be creating new IDs or we could force IDs if we change the model to not autoincrement temporarily.
+        # But usually simpler to just create new records.
+        
+        # Import Projects
+        projects_count = 0
+        if 'projetos' in data:
+            for p_data in data['projetos']:
+                if not Projeto.query.filter_by(numero=p_data['numero']).first():
+                    # Find responsavel
+                    resp = User.query.filter_by(email=p_data.get('responsavel_email')).first()
+                    resp_id = resp.id if resp else current_user.id
+                    
+                    new_proj = Projeto(
+                        numero=p_data['numero'],
+                        nome=p_data['nome'],
+                        descricao=p_data.get('descricao'),
+                        endereco=p_data.get('endereco'),
+                        tipo_obra=p_data.get('tipo_obra', 'Residencial'),
+                        construtora=p_data.get('construtora', 'N/A'),
+                        nome_funcionario=p_data.get('nome_funcionario', 'N/A'),
+                        responsavel_id=resp_id,
+                        email_principal=p_data.get('email_principal', 'admin@example.com'),
+                        status=p_data.get('status', 'Ativo')
+                    )
+                    db.session.add(new_proj)
+                    projects_count += 1
+            db.session.commit()
+
+        return jsonify({
+            'message': 'Migration batch processed',
+            'users_imported': users_count,
+            'projects_imported': projects_count
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
     """
     Retorna dados padrão para o app (Checklists, Legendas)
     """
