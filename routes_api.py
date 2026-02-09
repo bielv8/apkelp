@@ -235,3 +235,154 @@ def sync_down(current_user):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+@api_bp.route('/defaults', methods=['GET'])
+@token_required
+def get_defaults(current_user):
+    """
+    Retorna dados padrão para o app (Checklists, Legendas)
+    """
+    try:
+        from models import ChecklistPadrao, LegendaPredefinida
+        
+        checklists = ChecklistPadrao.query.filter_by(ativo=True).order_by(ChecklistPadrao.ordem).all()
+        legendas = LegendaPredefinida.query.filter_by(ativo=True).all()
+        
+        return jsonify({
+            'checklists': [{'id': c.id, 'texto': c.texto, 'ordem': c.ordem} for c in checklists],
+            'legendas': [{'id': l.id, 'texto': l.texto, 'categoria': l.categoria} for l in legendas]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/reports/create', methods=['POST'])
+@token_required
+def create_report(current_user):
+    """
+    Cria um novo relatório via API.
+    Handles auto-numbering and checklist storage.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Validate required fields
+        if not data.get('projeto_id'):
+            return jsonify({'error': 'projeto_id is required'}), 400
+
+        projeto = db.session.get(Projeto, data['projeto_id'])
+        if not projeto:
+            return jsonify({'error': 'Projeto not found'}), 404
+
+        # Generate Sequential Number
+        # Lock this operation in a transaction if high concurrency, but for now simple query is fine
+        last_report = Relatorio.query.filter_by(projeto_id=projeto.id).order_by(Relatorio.numero_projeto.desc()).first()
+        next_num = (last_report.numero_projeto + 1) if last_report and last_report.numero_projeto else 1
+        
+        # Format: PROJ-NUM (e.g., P123-1, P123-2)
+        report_numero = f"{projeto.numero}-{next_num}"
+
+        # Parse date
+        try:
+            data_relatorio = datetime.datetime.fromisoformat(data['data_relatorio'].replace('Z', '+00:00')) if data.get('data_relatorio') else datetime.datetime.utcnow()
+        except:
+            data_relatorio = datetime.datetime.utcnow()
+
+        new_report = Relatorio(
+            numero=report_numero,
+            numero_projeto=next_num,
+            projeto_id=projeto.id,
+            autor_id=current_user.id,
+            titulo=data.get('titulo', 'Relatório de Visita'),
+            descricao=data.get('descricao'),
+            observacoes_finais=data.get('observacoes'),
+            condicoes_climaticas=data.get('condicoes_climaticas'), # Note: field might need to be added to model if not exists, storing in descricao/obs for now or add column
+            data_relatorio=data_relatorio,
+            status=data.get('status', 'Aguardando Aprovação'),
+            checklist_data=data.get('checklist_data'), # JSON string
+            created_at=datetime.datetime.utcnow()
+        )
+        
+        # If 'observacoes_finais' or 'condicoes_climaticas' are not in model yet, append to description
+        if not hasattr(Relatorio, 'condicoes_climaticas') and data.get('condicoes_climaticas'):
+             new_report.descricao = (new_report.descricao or "") + f"\n\nCondições: {data.get('condicoes_climaticas')}"
+
+        db.session.add(new_report)
+        db.session.commit()
+
+        logging.info(f"✅ Report created via API: {new_report.numero} by {current_user.username}")
+
+        return jsonify({
+            'message': 'Relatório criado com sucesso',
+            'id': new_report.id,
+            'numero': new_report.numero,
+            'status': new_report.status
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"❌ Error creating report: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/fotos/upload', methods=['POST'])
+@token_required
+def upload_photo(current_user):
+    """
+    Upload de foto vinculada a um relatório.
+    Expects multipart/form-data with 'photo' file and 'reportId'.
+    """
+    try:
+        if 'photo' not in request.files:
+            return jsonify({'error': 'No photo file provided'}), 400
+            
+        file = request.files['photo']
+        report_id = request.form.get('reportId')
+        
+        if not report_id:
+             return jsonify({'error': 'reportId is required'}), 400
+
+        # Find report
+        report = db.session.get(Relatorio, report_id)
+        if not report:
+            return jsonify({'error': 'Report not found'}), 404
+
+        # Verify permission
+        if report.autor_id != current_user.id and not current_user.is_master:
+            return jsonify({'error': 'Permission denied'}), 403
+
+        # Save file
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        if file:
+            filename = f"report_{report.id}_{int(datetime.datetime.utcnow().timestamp())}_{file.filename}"
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            
+            # Ensure folder exists
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            filepath = os.path.join(upload_folder, filename)
+            file.save(filepath)
+            
+            # Create DB Record
+            foto = FotoRelatorio(
+                relatorio_id=report.id,
+                filename=filename,
+                url=f"/uploads/{filename}", # Relative URL for frontend
+                titulo=request.form.get('titulo', ''),
+                legenda=request.form.get('legenda', ''),
+                created_at=datetime.datetime.utcnow()
+            )
+            
+            db.session.add(foto)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Foto enviada com sucesso',
+                'id': foto.id,
+                'url': foto.url
+            }), 201
+            
+    except Exception as e:
+        logging.error(f"❌ Photo upload failed: {e}")
+        return jsonify({'error': str(e)}), 500
