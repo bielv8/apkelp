@@ -128,22 +128,38 @@ try:
     logging.info("✅ Flask extensions initialized successfully")
 
     # ROOT LEVEL ROUTES
+    @app.route('/init-db')
+    def init_db_route():
+        try:
+            from init_db import init_database
+            success = init_database()
+            if success:
+                return jsonify({"status": "success", "message": "Database tables created successfully"}), 200
+            else:
+                return jsonify({"status": "error", "message": "Failed to create database tables"}), 500
+        except Exception as e:
+            logging.error(f"Manual DB init failed: {str(e)}")
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    @app.route('/api-status')
+    def api_status():
+        from datetime import datetime
+        return jsonify({
+            "status": "online",
+            "server_time": datetime.now().isoformat(),
+            "database": "connected" if db.engine else "disconnected"
+        })
+
     @app.route('/')
     def index():
-        """API root - show available endpoints"""
-        return {
-            'name': 'ELP Relatórios API',
-            'version': '2.0',
-            'status': 'online',
-            'endpoints': {
-                'health': '/health',
-                'api_status': '/api/status',
-                'login': '/api/login',
-                'dashboard': '/api/dashboard',
-                'projects': '/api/projects',
-                'reports': '/api/reports'
+        return jsonify({
+            "message": "ObraFlow API is running",
+            "endpoints": {
+                "health": "/health",
+                "init_db": "/init-db",
+                "status": "/api-status"
             }
-        }, 200
+        })
     
     @app.route('/health')
     def health_check():
