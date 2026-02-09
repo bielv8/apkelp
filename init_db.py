@@ -1,35 +1,46 @@
-#!/usr/bin/env python
-"""Script para inicializar o banco de dados com todas as tabelas"""
-
-import os
-import sys
-
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(__file__))
-
+"""
+Database initialization script for Railway deployment
+Creates all tables if they don't exist
+"""
 from app import app, db
-from models import *
+from models import (
+    User, Projeto, Relatorio, Visita, FotoRelatorio,
+    Contato, ContatoProjeto, Reembolso, EnvioRelatorio,
+    ChecklistTemplate, ChecklistItem, ComunicacaoVisita,
+    EmailCliente, ChecklistPadrao, LogEnvioEmail,
+    ConfiguracaoEmail, LegendaPredefinida, FuncionarioProjeto,
+    AprovadorPadrao, ProjetoChecklistConfig, ChecklistObra,
+    VisitaParticipante, TipoObra, CategoriaObra, Notificacao,
+    GoogleDriveToken, RelatorioExpress, FotoRelatorioExpress,
+    Lembrete, UserEmailConfig, UserDevice
+)
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 def init_database():
-    """Inicializa o banco de dados criando todas as tabelas"""
+    """Initialize database tables"""
     with app.app_context():
-        print("🔧 Iniciando criação do banco de dados...")
-        
-        # Drop all tables (apenas para desenvolvimento)
-        # db.drop_all()
-        # print("🗑️  Tabelas antigas removidas")
-        
-        # Create all tables
-        db.create_all()
-        print("✅ Todas as tabelas criadas com sucesso!")
-        
-        # Verificar tabelas criadas
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        tables = inspector.get_table_names()
-        print(f"\n📋 Tabelas criadas ({len(tables)}):")
-        for table in sorted(tables):
-            print(f"   - {table}")
+        try:
+            logging.info("🔄 Creating database tables...")
+            db.create_all()
+            logging.info("✅ Database tables created successfully!")
+            
+            # Verify tables were created
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            logging.info(f"📊 Tables in database: {len(tables)}")
+            for table in tables:
+                logging.info(f"  - {table}")
+            
+            return True
+        except Exception as e:
+            logging.error(f"❌ Error creating database tables: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 if __name__ == "__main__":
-    init_database()
+    success = init_database()
+    exit(0 if success else 1)

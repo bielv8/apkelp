@@ -127,6 +127,19 @@ try:
 
     logging.info("✅ Flask extensions initialized successfully")
 
+    # ROOT LEVEL HEALTH CHECK - Railway needs this at /health (not /api/health)
+    @app.route('/health')
+    def health_check():
+        """Simple health check for Railway deployment"""
+        try:
+            # Test database connection
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            return {'status': 'healthy', 'database': 'connected'}, 200
+        except Exception as e:
+            logging.error(f"Health check failed: {e}")
+            return {'status': 'unhealthy', 'error': str(e)}, 503
+
     # Register API Blueprint
     from routes_api import api_bp
     app.register_blueprint(api_bp)
