@@ -706,13 +706,10 @@ try:
     app.register_blueprint(api_bp)
     logging.info("✅ API Blueprint registered at /api")
     
-    # IMPORT ORIGINAL WEB SYSTEM ROUTES (Identical to Web Version)
-    logging.info("🌐 Importing web system routes (routes.py, routes_relatorios_api.py, etc.)")
-    import routes             # Main web logic
-    import routes_relatorios_api # Advanced Report API with autosave
-    import routes_express     # Express Report logic
-    import routes_pwa         # PWA specific logic
-    logging.info("✅ All core web routes successfully imported")
+    # Surgical imports only - Avoid routes.py which shadows paths
+    logging.info("🌐 Surgical import of specific API route files...")
+    import routes_relatorios_api # Advanced Report API - typically safe
+    logging.info("✅ routes_relatorios_api imported")
     
 except ImportError as ie:
     logging.error(f"❌ Could not import routes: {ie}")
