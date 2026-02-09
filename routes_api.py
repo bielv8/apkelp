@@ -41,7 +41,11 @@ def token_required(f):
 
 @api_bp.route('/status', methods=['GET'])
 def api_status():
-    return jsonify({'status': 'online', 'server_time': datetime.datetime.utcnow().isoformat()})
+    return jsonify({
+        'status': 'online', 
+        'version': '2.1-admin-fix',
+        'server_time': datetime.datetime.utcnow().isoformat()
+    })
 
 @api_bp.route('/login', methods=['POST'])
 def login():
