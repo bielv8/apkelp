@@ -94,7 +94,7 @@ logging.info(f"📁 ELP_BACKUP_FOLDER configurado: {ELP_BACKUP_FOLDER}")
 
 # CSRF Configuration - Enable for security
 app.config['WTF_CSRF_ENABLED'] = True
-app.config['WTF_CSRF_CHECK_DEFAULT'] = True  # Check CSRF by default for security
+app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # Disable default check to allow manual API exemption
 app.config['WTF_CSRF_METHODS'] = ['POST', 'PUT', 'PATCH', 'DELETE']
 
 # OneSignal Push Notifications Configuration
@@ -114,11 +114,19 @@ try:
     # Disable CSRF for API routes (Mobile App uses JWT)
     csrf.exempt(app.view_functions.get('api_login_route')) # Explicitly exempt login if needed, but better to exempt blueprint or pattern
     
-    # Exempt all /api/* routes from CSRF
+    # Exempt all /api/* routes from CSRF - MANUAL GLOBAL TRAP
     @app.before_request
     def check_csrf():
+        # Allow all API routes
         if request.path.startswith('/api/'):
             return
+        # Allow health checks
+        if request.path.startswith('/health') or request.path.startswith('/init-db'):
+            return
+        # Allow static files
+        if request.path.startswith('/static/'):
+            return
+            
         csrf.protect()
 
     # Configure CORS for geolocation and API calls
